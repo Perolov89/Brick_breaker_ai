@@ -16,10 +16,19 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
+GREEN = (0, 255, 0)
+
+# Fonts
+FONT = pygame.font.Font(None, 36)
+
+# Game states
+STATE_PLAYING = "playing"
+STATE_GAME_OVER = "game_over"
+STATE_VICTORY = "victory"
 
 # Create screen
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Brick Breaker")
+pygame.display.set_caption("BricK BreakeR")
 
 
 # Clock for controlling the frame rate
@@ -34,9 +43,10 @@ PADDLE_HEIGHT = 20
 PADDLE_COLOR = WHITE
 PADDLE_SPEED = 8
 
+
 class Paddle:
     def __init__(self):
-        self.rect = pygame.Rect(SCREEN_WIDTH // 2 - PADDLE_WIDTH // 2, 
+        self.rect = pygame.Rect(SCREEN_WIDTH // 2 - PADDLE_WIDTH // 2,
                                 SCREEN_HEIGHT - 40, PADDLE_WIDTH, PADDLE_HEIGHT)
 
     def move(self, keys):
@@ -50,14 +60,16 @@ class Paddle:
 
 # Ball <=========================================
 
-# Properties   
+
+# Properties
 BALL_RADIUS = 10
 BALL_COLOR = WHITE
 BALL_SPEED = [4, -4]
 
+
 class Ball:
     def __init__(self):
-        self.rect = pygame.Rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, 
+        self.rect = pygame.Rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2,
                                 BALL_RADIUS * 2, BALL_RADIUS * 2)
         self.speed = BALL_SPEED
 
@@ -76,13 +88,14 @@ class Ball:
 
 
 # Bricks <=========================================
-        
+
 BRICK_WIDTH = 62
 BRICK_HEIGHT = 20
 BRICK_COLOR = WHITE
 BRICK_ROWS = 5
 BRICK_COLS = 12
 BRICK_PADDING = 5
+
 
 def create_bricks():
     bricks = []
@@ -94,16 +107,26 @@ def create_bricks():
             bricks.append(brick)
     return bricks
 
+
 bricks = create_bricks()
 
 def draw_bricks(bricks):
     for brick in bricks:
         pygame.draw.rect(screen, BRICK_COLOR, brick)
+
+
+# Game over or victory message <======================
         
+def display_message(text):
+    message = FONT.render(text, True, WHITE)
+    text_rect = message.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+    screen.blit(message, text_rect)
+
 
 # Main loop <=========================================
 
 def main():
+    state = STATE_PLAYING
 
     paddle = Paddle()
     ball = Ball()
@@ -114,41 +137,62 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.KEYDOWN:
+                # Restart game with Spacebar
+                if state != STATE_PLAYING and event.key == pygame.K_SPACE:
+                    state = STATE_PLAYING
+                    ball = Ball()
+                    paddle = Paddle()
+                    bricks = create_bricks()
 
         # Fill the screen with black
         screen.fill(BLACK)
 
-        # Get key states and update paddle
-        keys = pygame.key.get_pressed()
-        paddle.move(keys)
-        ball.move()
-        
+        if state == STATE_PLAYING:
+            # Get key states and update paddle
+            keys = pygame.key.get_pressed()
+            paddle.move(keys)
+            ball.move()
 
-        # Draw the paddle adn ball
-        paddle.draw()
-        ball.draw()
-        # Draw the bricks
-        draw_bricks(bricks)
+            # Draw the bricks, paddle, and ball
+            draw_bricks(bricks)
+            paddle.draw()
+            ball.draw()
+
+            # Bounce off paddle
+            if ball.rect.colliderect(paddle.rect):
+                ball.speed[1] = -ball.speed[1]
+
+            # Check for brick collisions
+            for brick in bricks[:]:
+                if ball.rect.colliderect(brick):
+                    ball.speed[1] = -ball.speed[1]
+                    bricks.remove(brick)
+                    break
+
+            # Check for game over condition
+            if ball.rect.top > SCREEN_HEIGHT:
+                state = STATE_GAME_OVER
+
+            # Check for victory condition
+            if not bricks:
+                state = STATE_VICTORY
+
+        elif state == STATE_GAME_OVER:
+            display_message("Game Over! Press Space to Restart")
+
+        elif state == STATE_VICTORY:
+            display_message("You Win! Press Space to Restart")
 
         # Refresh the game window
         pygame.display.flip()
 
         # Tick the clock
         clock.tick(FPS)
-        # Bounce off paddle
-        if ball.rect.colliderect(paddle.rect):
-            ball.speed[1] = -ball.speed[1]
-
-        # Check for brick collisions
-        for brick in bricks[:]:
-            if ball.rect.colliderect(brick):
-                ball.speed[1] = -ball.speed[1]
-                bricks.remove(brick)
-                break
-
 
     pygame.quit()
     sys.exit()
+
 
 if __name__ == "__main__":
     main()
