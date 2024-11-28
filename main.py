@@ -1,10 +1,11 @@
 import pygame
 import sys
+import random
 
 
 pygame.init()
 
-# Screen <=========================================
+# Screen <========================================= 
 
 # Screen dimensions
 SCREEN_WIDTH = 800
@@ -64,14 +65,16 @@ class Paddle:
 # Properties
 BALL_RADIUS = 10
 BALL_COLOR = WHITE
-BALL_SPEED = [4, -4]
+# BALL_SPEED = [4, -4]
 
 
 class Ball:
     def __init__(self):
-        self.rect = pygame.Rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2,
+        start_x = random.randint(50, SCREEN_WIDTH - 50)
+        self.rect = pygame.Rect(start_x, SCREEN_HEIGHT // 2, 
                                 BALL_RADIUS * 2, BALL_RADIUS * 2)
-        self.speed = BALL_SPEED
+        
+        self.speed = [random.choice([-4, 4]), random.choice([-4, -3, -2])]
 
     def move(self):
         self.rect.x += self.speed[0]
@@ -96,13 +99,12 @@ BRICK_ROWS = 5
 BRICK_COLS = 12
 BRICK_PADDING = 5
 
-
 def create_bricks():
     bricks = []
     for row in range(BRICK_ROWS):
         for col in range(BRICK_COLS):
             x = col * (BRICK_WIDTH + BRICK_PADDING)
-            y = row * (BRICK_HEIGHT + BRICK_PADDING)
+            y = row * (BRICK_HEIGHT + BRICK_PADDING) + 40
             brick = pygame.Rect(x, y, BRICK_WIDTH, BRICK_HEIGHT)
             bricks.append(brick)
     return bricks
@@ -115,12 +117,29 @@ def draw_bricks(bricks):
         pygame.draw.rect(screen, BRICK_COLOR, brick)
 
 
-# Game over or victory message <======================
+# Game over or victory message <============================
         
 def display_message(text):
     message = FONT.render(text, True, WHITE)
     text_rect = message.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
     screen.blit(message, text_rect)
+
+
+# Score and timer <=========================================
+def draw_score_and_timer(score, start_time):
+    # Calculate elapsed time
+    elapsed_time = pygame.time.get_ticks() - start_time
+    seconds = elapsed_time // 1000
+    centiseconds = elapsed_time % 100
+
+    # Render score and timer
+    score_text = FONT.render(f"Score: {score}", True, WHITE)
+    timer_text = FONT.render(f"Time: {seconds}.{centiseconds:02d}", True, WHITE)
+
+    # Display score and timer
+    screen.blit(score_text, (10, 10))
+    screen.blit(timer_text, (SCREEN_WIDTH - 200, 10))
+    # screen.blit(timer_text, (SCREEN_HEIGHT - 200, 10))
 
 
 # Main loop <=========================================
@@ -131,6 +150,8 @@ def main():
     paddle = Paddle()
     ball = Ball()
     bricks = create_bricks()
+    score = 0
+    start_time = pygame.time.get_ticks()
 
     running = True
     while running:
@@ -144,6 +165,9 @@ def main():
                     ball = Ball()
                     paddle = Paddle()
                     bricks = create_bricks()
+                    score = 0
+                    start_time = pygame.time.get_ticks()
+                    
 
         # Fill the screen with black
         screen.fill(BLACK)
@@ -159,6 +183,9 @@ def main():
             paddle.draw()
             ball.draw()
 
+            # Draw the score and timer
+            draw_score_and_timer(score, start_time)
+
             # Bounce off paddle
             if ball.rect.colliderect(paddle.rect):
                 ball.speed[1] = -ball.speed[1]
@@ -168,6 +195,7 @@ def main():
                 if ball.rect.colliderect(brick):
                     ball.speed[1] = -ball.speed[1]
                     bricks.remove(brick)
+                    score += 10
                     break
 
             # Check for game over condition
