@@ -1,6 +1,14 @@
 import pygame
 import sys
 import random
+import numpy as np
+import gym
+from gym import spaces
+
+# import tensorflow as tf
+
+# # Load the model
+# model = tf.keras.models.load_model('brick_breaker_model.h5')
 
 
 pygame.init()
@@ -65,7 +73,6 @@ class Paddle:
 # Properties
 BALL_RADIUS = 10
 BALL_COLOR = WHITE
-# BALL_SPEED = [4, -4]
 
 
 class Ball:
@@ -117,7 +124,7 @@ def draw_bricks(bricks):
         pygame.draw.rect(screen, BRICK_COLOR, brick)
 
 
-# Game over or victory message <============================
+# Game over or victory message
         
 def display_message(text):
     message = FONT.render(text, True, WHITE)
@@ -139,13 +146,71 @@ def draw_score_and_timer(score, start_time):
     # Display score and timer
     screen.blit(score_text, (10, 10))
     screen.blit(timer_text, (SCREEN_WIDTH - 200, 10))
-    # screen.blit(timer_text, (SCREEN_HEIGHT - 200, 10))
+
+
+
+# =============================================================================== model
+    
+class BrickBreakerEnv(gym.Env):
+    def __init__(self):
+        super(BrickBreakerEnv, self).__init__()
+        self.observation_space = spaces.Box(low=0, high=1, shape=(5,), dtype=np.float32)
+        self.action_space = spaces.Discrete(3)
+        
+        # Initialize pygame for rendering
+        pygame.init()
+        self.screen_width = 800
+        self.screen_height = 600
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        pygame.display.set_caption("Brick Breaker")
+        self.clock = pygame.time.Clock()
+
+        self.reset()
+
+    def render(self):
+        # Clear the screen
+        self.screen.fill((0, 0, 0))  # Black background
+
+        # Draw the paddle
+        paddle_width = 100
+        paddle_height = 10
+        paddle_x = self.paddle_x * self.screen_width
+        paddle_y = self.screen_height - 50  # Position paddle near the bottom
+        pygame.draw.rect(self.screen, (255, 255, 255),  # White paddle
+                         (paddle_x - paddle_width // 2, paddle_y, paddle_width, paddle_height))
+
+        # Draw the ball
+        ball_radius = 10
+        ball_x = int(self.ball_x * self.screen_width)
+        ball_y = int(self.ball_y * self.screen_height)
+        pygame.draw.circle(self.screen, (255, 255, 255), (ball_x, ball_y), ball_radius)
+
+        # Draw the score and timer
+        font = pygame.font.Font(None, 36)
+        score_text = font.render(f"Score: {self.score}", True, (255, 255, 255))
+        time_text = font.render(f"Time: {self.time_elapsed:.2f}s", True, (255, 255, 255))
+        self.screen.blit(score_text, (10, 10))
+        self.screen.blit(time_text, (10, 50))
+
+        # Update the display
+        pygame.display.flip()
+        self.clock.tick(60)  # Limit to 60 FPS
+
+        def close(self):
+            pygame.quit()
+
+
+
+# =============================================================================== model
+
+
+
 
 
 # Main loop <=========================================
 
 def main():
-    state = STATE_PLAYING
+    state = STATE_PLAYING  # <============================= state
 
     paddle = Paddle()
     ball = Ball()
@@ -160,20 +225,20 @@ def main():
                 running = False
             elif event.type == pygame.KEYDOWN:
                 # Restart game with Spacebar
-                if state != STATE_PLAYING and event.key == pygame.K_SPACE:
+                if state != STATE_PLAYING and event.key == pygame.K_SPACE:  # <============= state
                     state = STATE_PLAYING
                     ball = Ball()
                     paddle = Paddle()
                     bricks = create_bricks()
                     score = 0
                     start_time = pygame.time.get_ticks()
-                    
+
 
         # Fill the screen with black
         screen.fill(BLACK)
 
         if state == STATE_PLAYING:
-            # Get key states and update paddle
+            # Get key states and update paddle <============================= state
             keys = pygame.key.get_pressed()
             paddle.move(keys)
             ball.move()
@@ -186,23 +251,33 @@ def main():
             # Draw the score and timer
             draw_score_and_timer(score, start_time)
 
-            # Bounce off paddle
+            # Paddle collision
             if ball.rect.colliderect(paddle.rect):
-                ball.speed[1] = -ball.speed[1]
+                # Check if the ball hits the top of the paddle
+                if ball.rect.bottom >= paddle.rect.top and ball.rect.centery < paddle.rect.top:
+                    ball.speed[1] = -abs(ball.speed[1])  # Ensure the ball always bounces upward
+                # Check if the ball hits the left side of the paddle
+                elif ball.rect.right >= paddle.rect.left and ball.rect.centerx < paddle.rect.left:
+                    ball.speed[0] = -abs(ball.speed[0])  # Bounce horizontally
+                    ball.rect.right = paddle.rect.left  # Nudge the ball outside
+                # Check if the ball hits the right side of the paddle
+                elif ball.rect.left <= paddle.rect.right and ball.rect.centerx > paddle.rect.right:
+                    ball.speed[0] = abs(ball.speed[0])  # Bounce horizontally
+                    ball.rect.left = paddle.rect.right  # Nudge the ball outside
 
-            # Check for brick collisions
+            # Check for brick collisions 
             for brick in bricks[:]:
                 if ball.rect.colliderect(brick):
                     ball.speed[1] = -ball.speed[1]
                     bricks.remove(brick)
-                    score += 10
+                    score += 10      #         <============================= reward
                     break
 
-            # Check for game over condition
+            # Check for game over condition    <============================= conclusion states
             if ball.rect.top > SCREEN_HEIGHT:
                 state = STATE_GAME_OVER
 
-            # Check for victory condition
+            # Check for victory condition       
             if not bricks:
                 state = STATE_VICTORY
 

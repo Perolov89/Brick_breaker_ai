@@ -164,3 +164,7 @@ cython_debug/
 
 # notes
 notes.txt
+
+# the model 
+brick_breaker_dqn.h5
+
