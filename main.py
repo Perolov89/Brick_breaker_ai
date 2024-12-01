@@ -150,58 +150,66 @@ def draw_score_and_timer(score, start_time):
 
 
 # =============================================================================== model
-    
 class BrickBreakerEnv(gym.Env):
     def __init__(self):
         super(BrickBreakerEnv, self).__init__()
         self.observation_space = spaces.Box(low=0, high=1, shape=(5,), dtype=np.float32)
         self.action_space = spaces.Discrete(3)
-        
-        # Initialize pygame for rendering
-        pygame.init()
-        self.screen_width = 800
-        self.screen_height = 600
-        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
-        pygame.display.set_caption("Brick Breaker")
-        self.clock = pygame.time.Clock()
-
         self.reset()
 
-    def render(self):
-        # Clear the screen
-        self.screen.fill((0, 0, 0))  # Black background
+    def reset(self):
+        self.ball_x, self.ball_y = 0.5, 0.5
+        self.ball_dx, self.ball_dy = 0.03, 0.03
+        self.paddle_x = 0.5
+        self.score = 0
+        self.time_elapsed = 0
+        self.start_time = pygame.time.get_ticks()
+        return np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x])
 
-        # Draw the paddle
-        paddle_width = 100
-        paddle_height = 10
-        paddle_x = self.paddle_x * self.screen_width
-        paddle_y = self.screen_height - 50  # Position paddle near the bottom
-        pygame.draw.rect(self.screen, (255, 255, 255),  # White paddle
-                         (paddle_x - paddle_width // 2, paddle_y, paddle_width, paddle_height))
+    def step(self, action):
+        # Paddle movement logic
+        if action == 0:
+            self.paddle_x = max(0, self.paddle_x - 0.05)
+        elif action == 1:
+            self.paddle_x = min(1, self.paddle_x + 0.05)
 
-        # Draw the ball
-        ball_radius = 10
-        ball_x = int(self.ball_x * self.screen_width)
-        ball_y = int(self.ball_y * self.screen_height)
-        pygame.draw.circle(self.screen, (255, 255, 255), (ball_x, ball_y), ball_radius)
+        # Ball movement logic
+        self.ball_x += self.ball_dx
+        self.ball_y += self.ball_dy
 
-        # Draw the score and timer
-        font = pygame.font.Font(None, 36)
-        score_text = font.render(f"Score: {self.score}", True, (255, 255, 255))
-        time_text = font.render(f"Time: {self.time_elapsed:.2f}s", True, (255, 255, 255))
-        self.screen.blit(score_text, (10, 10))
-        self.screen.blit(time_text, (10, 50))
+        # Collision detection
+        reward = 0
+        done = False
+        if self.ball_x <= 0 or self.ball_x >= 1:
+            self.ball_dx *= -1
+        if self.ball_y <= 0:
+            self.ball_dy *= -1
+        if self.ball_y >= 1:  # Ball lost
+            reward = -1
+            done = True
 
-        # Update the display
-        pygame.display.flip()
-        self.clock.tick(60)  # Limit to 60 FPS
+        # Check for paddle collision
+        if self.ball_y >= 0.95 and abs(self.paddle_x - self.ball_x) < 0.1:
+            self.ball_dy *= -1
 
-        def close(self):
-            pygame.quit()
+        # Update time and add small reward
+        current_time = pygame.time.get_ticks()
+        self.time_elapsed = (current_time - self.start_time) / 1000  # Time in seconds
+        reward += 0.1  # Time-based reward
 
+        # Add reward for breaking bricks (mock brick collision for now)
+        brick_hit = random.choice([True, False])  # Simulated brick hit
+        if brick_hit:
+            self.score += 10  # Increment score
+            reward += 10  # Score-based reward
+
+        return (np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x]),
+                reward, done, {"score": self.score, "time": self.time_elapsed})
 
 
 # =============================================================================== model
+
+
 
 
 
