@@ -177,41 +177,65 @@ class BrickBreakerEnv(gym.Env):
         self.ball_x += self.ball_dx
         self.ball_y += self.ball_dy
 
+                                                    #         <============================= rewards
         # Collision detection
         reward = 0
         done = False
+
+        # Ball-wall collision
         if self.ball_x <= 0 or self.ball_x >= 1:
             self.ball_dx *= -1
         if self.ball_y <= 0:
             self.ball_dy *= -1
         if self.ball_y >= 1:  # Ball lost
-            reward = -1
+            reward = -20
             done = True
 
         # Check for paddle collision
         if self.ball_y >= 0.95 and abs(self.paddle_x - self.ball_x) < 0.1:
             self.ball_dy *= -1
+            reward += 30
+
+        # Close to ball 
+        if abs(self.paddle_x - self.ball_x) < 0.1:
+            reward += 2  # Small reward for being near the ball
+
 
         # Update time and add small reward
         current_time = pygame.time.get_ticks()
         self.time_elapsed = (current_time - self.start_time) / 1000  # Time in seconds
-        reward += 0.1  # Time-based reward
+        reward += 0.1  # Reward for survival
 
-        # Add reward for breaking bricks (mock brick collision for now)
+        # Brick-breaking rewards                                      (mocked) replace later
         brick_hit = random.choice([True, False])  # Simulated brick hit
         if brick_hit:
             self.score += 10  # Increment score
             reward += 10  # Score-based reward
 
+        if action == 1 and abs(self.paddle_x - self.ball_x) > 0.1:
+            reward -= 0.2  # Small penalty for idling
+
         return (np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x]),
                 reward, done, {"score": self.score, "time": self.time_elapsed})
 
+# Collection of rewards
+    '''
+
+    Lose ball = -10
+    Paddle collision = +2    (could try to increase)
+    Near the ball = + 0.5
+    Time survived = + 0.1 per second
+    Brick breaking = 10
+
+    testing to force movement:
+    Penalty for idling
+    Increased reward for being close to ball
+    Increased reward for collision with paddle
+
+    '''
+
 
 # =============================================================================== model
-
-
-
-
 
 
 
@@ -278,7 +302,7 @@ def main():
                 if ball.rect.colliderect(brick):
                     ball.speed[1] = -ball.speed[1]
                     bricks.remove(brick)
-                    score += 10      #         <============================= reward
+                    score += 10      
                     break
 
             # Check for game over condition    <============================= conclusion states
