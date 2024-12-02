@@ -187,52 +187,93 @@ class BrickBreakerEnv(gym.Env):
         return self.ball_x  # Default to ball's current x if no vertical movement
 
     def step(self, action):
+        previous_paddle_x = self.paddle_x
+        
         # Paddle movement logic
-        if action == 0:
+        if action == 0:  # Left
             self.paddle_x = max(0, self.paddle_x - 0.05)
-        elif action == 1:
-            pass
-        elif action == 2:
+        elif action == 2:  # Right
             self.paddle_x = min(1, self.paddle_x + 0.05)
-
+        
         # Ball movement logic
         self.ball_x += self.ball_dx
         self.ball_y += self.ball_dy
-
+        
         reward = 0
         done = False
-
-        # Penalize losing the ball
-        if self.ball_y >= 1:
-            reward = -50
-            done = True
-
-        # Reward for intercept alignment
+        
+        # 1. Basic survival reward (small positive reward for staying alive)
+        reward += 0.1
+        
+        # 2. Positioning rewards
         intercept_x = self.calculate_intercept()
-        distance = abs(self.paddle_x - intercept_x)
-
-        if distance < 0.05:
-            reward += 20  # Strong reward for perfect alignment
-        else:
-            reward -= distance * 10  # Penalize being far from the intercept
-
-        # Penalize for idleness when movement is needed
-        if action == 1 and distance > 0.05:  # Stay action while far from intercept
-            reward -= 1
-
-        # Reward for intercepting the ball
-        if self.ball_y >= 0.95 and abs(self.paddle_x - self.ball_x) < 0.1:
-            reward += 50  # Positive reward for successful interception
-
+        distance_to_intercept = abs(self.paddle_x - intercept_x)
+        
+        # Exponential reward for good positioning (maximum +5 when perfectly aligned)
+        position_reward = 5 * np.exp(-10 * distance_to_intercept)
+        reward += position_reward
+        
+        # 3. Movement efficiency reward
+        movement_penalty = abs(self.paddle_x - previous_paddle_x) * 2
+        reward -= movement_penalty  # Penalize excessive movement
+        
+        # 4. Center court positioning when ball is far
+        if self.ball_y < 0.3:  # Ball is far from paddle
+            distance_to_center = abs(self.paddle_x - 0.5)
+            reward += 2 * (1 - distance_to_center)  # Reward being near center
+        
+        # 5. Brick breaking reward (assuming you add brick collision detection)
+        if self.check_brick_collision():  # You'll need to implement this
+            reward += 10
+        
+        # 6. Ball interception reward
+        if 0.9 <= self.ball_y <= 0.95 and distance_to_intercept < 0.1:
+            reward += 20  # Immediate reward for successful interception
+        
+        # 7. Game ending conditions
+        if self.ball_y >= 1:  # Ball lost
+            reward -= 30
+            done = True
+        
+        # 8. Victory reward
+        if len(self.bricks) == 0:  # All bricks broken
+            reward += 100
+            done = True
+        
         # Update time
         current_time = pygame.time.get_ticks()
-        self.time_elapsed = (current_time - self.start_time) / \
-            1000  # Time in seconds
+        self.time_elapsed = (current_time - self.start_time) / 1000
+        
+        # State for next iteration
+        next_state = np.array([
+            self.ball_x, 
+            self.ball_y, 
+            self.ball_dx, 
+            self.ball_dy, 
+            self.paddle_x, 
+            intercept_x
+        ])
+        
+        return next_state, reward, done, {
+            "score": self.score, 
+            "time": self.time_elapsed
+        }
 
-        intercept_x = self.calculate_intercept()
-        return np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x, intercept_x]), reward, done, {"score": self.score, "time": self.time_elapsed}
-
-
+def check_brick_collision(self):
+    # Implement brick collision detection here
+    # Return True if ball hits a brick, False otherwise
+    ball_rect = pygame.Rect(
+        self.ball_x * SCREEN_WIDTH, 
+        self.ball_y * SCREEN_HEIGHT,
+        BALL_RADIUS * 2, 
+        BALL_RADIUS * 2
+    )
+    
+    for brick in self.bricks[:]:
+        if ball_rect.colliderect(brick):
+            self.bricks.remove(brick)
+            return True
+    return False
 # =============================================================================== model
 
 
