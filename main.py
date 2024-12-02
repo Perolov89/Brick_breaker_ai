@@ -13,7 +13,7 @@ from gym import spaces
 
 pygame.init()
 
-# Screen <========================================= 
+# Screen <=========================================
 
 # Screen dimensions
 SCREEN_WIDTH = 800
@@ -78,9 +78,9 @@ BALL_COLOR = WHITE
 class Ball:
     def __init__(self):
         start_x = random.randint(50, SCREEN_WIDTH - 50)
-        self.rect = pygame.Rect(start_x, SCREEN_HEIGHT // 2, 
+        self.rect = pygame.Rect(start_x, SCREEN_HEIGHT // 2,
                                 BALL_RADIUS * 2, BALL_RADIUS * 2)
-        
+
         self.speed = [random.choice([-4, 4]), random.choice([-4, -3, -2])]
 
     def move(self):
@@ -106,6 +106,7 @@ BRICK_ROWS = 5
 BRICK_COLS = 12
 BRICK_PADDING = 5
 
+
 def create_bricks():
     bricks = []
     for row in range(BRICK_ROWS):
@@ -119,16 +120,18 @@ def create_bricks():
 
 bricks = create_bricks()
 
+
 def draw_bricks(bricks):
     for brick in bricks:
         pygame.draw.rect(screen, BRICK_COLOR, brick)
 
 
 # Game over or victory message
-        
+
 def display_message(text):
     message = FONT.render(text, True, WHITE)
-    text_rect = message.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+    text_rect = message.get_rect(
+        center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
     screen.blit(message, text_rect)
 
 
@@ -141,19 +144,20 @@ def draw_score_and_timer(score, start_time):
 
     # Render score and timer
     score_text = FONT.render(f"Score: {score}", True, WHITE)
-    timer_text = FONT.render(f"Time: {seconds}.{centiseconds:02d}", True, WHITE)
+    timer_text = FONT.render(
+        f"Time: {seconds}.{centiseconds:02d}", True, WHITE)
 
     # Display score and timer
     screen.blit(score_text, (10, 10))
     screen.blit(timer_text, (SCREEN_WIDTH - 200, 10))
 
 
-
 # =============================================================================== model
 class BrickBreakerEnv(gym.Env):
     def __init__(self):
         super(BrickBreakerEnv, self).__init__()
-        self.observation_space = spaces.Box(low=0, high=1, shape=(5,), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=0, high=1, shape=(6,), dtype=np.float32)
         self.action_space = spaces.Discrete(3)
         self.reset()
 
@@ -164,79 +168,72 @@ class BrickBreakerEnv(gym.Env):
         self.score = 0
         self.time_elapsed = 0
         self.start_time = pygame.time.get_ticks()
-        return np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x])
+
+        intercept_x = self.calculate_intercept()
+        return np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x, intercept_x])
+
+    def calculate_intercept(self):
+        # Calculate x-coordinate where the ball will hit the paddle's y-level
+        if self.ball_dy != 0:
+            steps_to_paddle = (0.95 - self.ball_y) / self.ball_dy
+            intercept_x = self.ball_x + self.ball_dx * steps_to_paddle
+            # Handle wrapping (ball crossing edges and bouncing)
+            while intercept_x < 0 or intercept_x > 1:
+                if intercept_x < 0:
+                    intercept_x = -intercept_x
+                elif intercept_x > 1:
+                    intercept_x = 2 - intercept_x
+            return intercept_x
+        return self.ball_x  # Default to ball's current x if no vertical movement
 
     def step(self, action):
         # Paddle movement logic
         if action == 0:
             self.paddle_x = max(0, self.paddle_x - 0.05)
         elif action == 1:
+            pass
+        elif action == 2:
             self.paddle_x = min(1, self.paddle_x + 0.05)
 
         # Ball movement logic
         self.ball_x += self.ball_dx
         self.ball_y += self.ball_dy
 
-                                                    #         <============================= rewards
-        # Collision detection
         reward = 0
         done = False
 
-        # Ball-wall collision
-        if self.ball_x <= 0 or self.ball_x >= 1:
-            self.ball_dx *= -1
-        if self.ball_y <= 0:
-            self.ball_dy *= -1
-        if self.ball_y >= 1:  # Ball lost
-            reward = -20
+        # Penalize losing the ball
+        if self.ball_y >= 1:
+            reward = -50
             done = True
 
-        # Check for paddle collision
+        # Reward for intercept alignment
+        intercept_x = self.calculate_intercept()
+        distance = abs(self.paddle_x - intercept_x)
+
+        if distance < 0.05:
+            reward += 20  # Strong reward for perfect alignment
+        else:
+            reward -= distance * 10  # Penalize being far from the intercept
+
+        # Penalize for idleness when movement is needed
+        if action == 1 and distance > 0.05:  # Stay action while far from intercept
+            reward -= 1
+
+        # Reward for intercepting the ball
         if self.ball_y >= 0.95 and abs(self.paddle_x - self.ball_x) < 0.1:
-            self.ball_dy *= -1
-            reward += 30
+            reward += 50  # Positive reward for successful interception
 
-        # Close to ball 
-        if abs(self.paddle_x - self.ball_x) < 0.1:
-            reward += 2  # Small reward for being near the ball
-
-
-        # Update time and add small reward
+        # Update time
         current_time = pygame.time.get_ticks()
-        self.time_elapsed = (current_time - self.start_time) / 1000  # Time in seconds
-        reward += 0.1  # Reward for survival
+        self.time_elapsed = (current_time - self.start_time) / \
+            1000  # Time in seconds
 
-        # Brick-breaking rewards                                      (mocked) replace later
-        brick_hit = random.choice([True, False])  # Simulated brick hit
-        if brick_hit:
-            self.score += 10  # Increment score
-            reward += 10  # Score-based reward
-
-        if action == 1 and abs(self.paddle_x - self.ball_x) > 0.1:
-            reward -= 0.2  # Small penalty for idling
-
-        return (np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x]),
-                reward, done, {"score": self.score, "time": self.time_elapsed})
-
-# Collection of rewards
-    '''
-
-    Lose ball = -10
-    Paddle collision = +2    (could try to increase)
-    Near the ball = + 0.5
-    Time survived = + 0.1 per second
-    Brick breaking = 10
-
-    testing to force movement:
-    Penalty for idling
-    Increased reward for being close to ball
-    Increased reward for collision with paddle
-
-    '''
+        intercept_x = self.calculate_intercept()
+        return np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x, intercept_x]), reward, done, {"score": self.score, "time": self.time_elapsed}
 
 
 # =============================================================================== model
-
 
 
 # Main loop <=========================================
@@ -265,7 +262,6 @@ def main():
                     score = 0
                     start_time = pygame.time.get_ticks()
 
-
         # Fill the screen with black
         screen.fill(BLACK)
 
@@ -287,7 +283,8 @@ def main():
             if ball.rect.colliderect(paddle.rect):
                 # Check if the ball hits the top of the paddle
                 if ball.rect.bottom >= paddle.rect.top and ball.rect.centery < paddle.rect.top:
-                    ball.speed[1] = -abs(ball.speed[1])  # Ensure the ball always bounces upward
+                    # Ensure the ball always bounces upward
+                    ball.speed[1] = -abs(ball.speed[1])
                 # Check if the ball hits the left side of the paddle
                 elif ball.rect.right >= paddle.rect.left and ball.rect.centerx < paddle.rect.left:
                     ball.speed[0] = -abs(ball.speed[0])  # Bounce horizontally
@@ -297,19 +294,19 @@ def main():
                     ball.speed[0] = abs(ball.speed[0])  # Bounce horizontally
                     ball.rect.left = paddle.rect.right  # Nudge the ball outside
 
-            # Check for brick collisions 
+            # Check for brick collisions
             for brick in bricks[:]:
                 if ball.rect.colliderect(brick):
                     ball.speed[1] = -ball.speed[1]
                     bricks.remove(brick)
-                    score += 10      
+                    score += 10
                     break
 
             # Check for game over condition    <============================= conclusion states
             if ball.rect.top > SCREEN_HEIGHT:
                 state = STATE_GAME_OVER
 
-            # Check for victory condition       
+            # Check for victory condition
             if not bricks:
                 state = STATE_VICTORY
 

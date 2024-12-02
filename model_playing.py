@@ -35,6 +35,21 @@ class ModelPlayer:
         self.start_time = pygame.time.get_ticks()
         self.font = pygame.font.Font(None, 36)
         self.game_over = False
+    
+    def calculate_intercept(self):
+    # Calculate x-coordinate where the ball will intersect the paddle's y-level
+        if self.ball_speed[1] != 0:
+            steps_to_paddle = (self.paddle.top - self.ball.bottom) / self.ball_speed[1]
+            intercept_x = self.ball.centerx + self.ball_speed[0] * steps_to_paddle
+
+            # Handle wall collisions (wrapping effect)
+            while intercept_x < 0 or intercept_x > SCREEN_WIDTH:
+                if intercept_x < 0:
+                    intercept_x = -intercept_x
+                elif intercept_x > SCREEN_WIDTH:
+                    intercept_x = 2 * SCREEN_WIDTH - intercept_x
+            return intercept_x / SCREEN_WIDTH
+        return self.ball.centerx / SCREEN_WIDTH
 
     def create_bricks(self):
         bricks = []
@@ -47,13 +62,15 @@ class ModelPlayer:
     def get_state(self):
         # Convert game state to model input format
         # Normalize all values to be between 0 and 1
+        intercept_x = self.calculate_intercept()
         return np.array([
-            self.paddle.centerx / SCREEN_WIDTH,
-            self.ball.centerx / SCREEN_WIDTH,
-            self.ball.centery / SCREEN_HEIGHT,
-            (self.ball_speed[0] + 10) / 20,
-            (self.ball_speed[1] + 10) / 20 
-        ], dtype=np.float32)
+        self.paddle.centerx / SCREEN_WIDTH,
+        self.ball.centerx / SCREEN_WIDTH,
+        self.ball.centery / SCREEN_HEIGHT,
+        (self.ball_speed[0] + 10) / 20,
+        (self.ball_speed[1] + 10) / 20,
+        intercept_x
+    ], dtype=np.float32)
 
     def update(self):
         if self.game_over:
