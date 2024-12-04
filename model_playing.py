@@ -27,7 +27,8 @@ class ModelPlayer:
 
     def reset_game(self):
         # Initialize game objects
-        self.paddle = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 40, 100, 20)
+        self.paddle = pygame.Rect(
+            SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 40, 100, 20)
         self.ball = pygame.Rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, 20, 20)
         self.ball_speed = [4, -4]
         self.bricks = self.create_bricks()
@@ -35,21 +36,24 @@ class ModelPlayer:
         self.start_time = pygame.time.get_ticks()
         self.font = pygame.font.Font(None, 36)
         self.game_over = False
-    
-    def calculate_intercept(self):
-    # Calculate x-coordinate where the ball will intersect the paddle's y-level
-        if self.ball_speed[1] != 0:
-            steps_to_paddle = (self.paddle.top - self.ball.bottom) / self.ball_speed[1]
-            intercept_x = self.ball.centerx + self.ball_speed[0] * steps_to_paddle
 
-            # Handle wall collisions (wrapping effect)
-            while intercept_x < 0 or intercept_x > SCREEN_WIDTH:
-                if intercept_x < 0:
-                    intercept_x = -intercept_x
-                elif intercept_x > SCREEN_WIDTH:
-                    intercept_x = 2 * SCREEN_WIDTH - intercept_x
-            return intercept_x / SCREEN_WIDTH
-        return self.ball.centerx / SCREEN_WIDTH
+        self.ball_start_x = self.ball.centerx
+        self.ball_start_y = self.ball.centery
+
+    # def calculate_intercept(self):
+    # # Calculate x-coordinate where the ball will intersect the paddle's y-level
+    #     if self.ball_speed[1] != 0:
+    #         steps_to_paddle = (self.paddle.top - self.ball.bottom) / self.ball_speed[1]
+    #         intercept_x = self.ball.centerx + self.ball_speed[0] * steps_to_paddle
+
+    #         # Handle wall collisions (wrapping effect)
+    #         while intercept_x < 0 or intercept_x > SCREEN_WIDTH:
+    #             if intercept_x < 0:
+    #                 intercept_x = -intercept_x
+    #             elif intercept_x > SCREEN_WIDTH:
+    #                 intercept_x = 2 * SCREEN_WIDTH - intercept_x
+    #         return intercept_x / SCREEN_WIDTH
+    #     return self.ball.centerx / SCREEN_WIDTH
 
     def create_bricks(self):
         bricks = []
@@ -62,15 +66,16 @@ class ModelPlayer:
     def get_state(self):
         # Convert game state to model input format
         # Normalize all values to be between 0 and 1
-        intercept_x = self.calculate_intercept()
+        # intercept_x = self.calculate_intercept()
         return np.array([
-        self.paddle.centerx / SCREEN_WIDTH,
-        self.ball.centerx / SCREEN_WIDTH,
-        self.ball.centery / SCREEN_HEIGHT,
-        (self.ball_speed[0] + 10) / 20,
-        (self.ball_speed[1] + 10) / 20,
-        intercept_x
-    ], dtype=np.float32)
+            self.paddle.centerx / SCREEN_WIDTH,
+            self.ball.centerx / SCREEN_WIDTH,
+            self.ball.centery / SCREEN_HEIGHT,
+            (self.ball_speed[0] + 10) / 20,
+            (self.ball_speed[1] + 10) / 20,
+            self.ball_start_x / SCREEN_WIDTH,
+            self.ball_start_y / SCREEN_HEIGHT
+        ], dtype=np.float32)
 
     def update(self):
         if self.game_over:
@@ -80,14 +85,15 @@ class ModelPlayer:
         state = self.get_state()
         q_values = self.model.predict(state[np.newaxis], verbose=0)[0]
         action = np.argmax(q_values)
-        
+
         # Move paddle based on prediction
         # Action: 0 = left, 1 = stay, 2 = right
         paddle_speed = 8
         if action == 0:  # Left
             self.paddle.x = max(0, self.paddle.x - paddle_speed)
         elif action == 2:  # Right
-            self.paddle.x = min(SCREEN_WIDTH - self.paddle.width, self.paddle.x + paddle_speed)
+            self.paddle.x = min(
+                SCREEN_WIDTH - self.paddle.width, self.paddle.x + paddle_speed)
 
         # Debug info                         <==================================== debug
         print(f"State: {state}")
@@ -107,7 +113,8 @@ class ModelPlayer:
         # Paddle collision
         if self.ball.colliderect(self.paddle):
             # Calculate relative position of collision
-            relative_intersect = (self.paddle.centerx - self.ball.centerx) / (self.paddle.width / 2)
+            relative_intersect = (self.paddle.centerx -
+                                  self.ball.centerx) / (self.paddle.width / 2)
             # Adjust angle based on where ball hits paddle
             self.ball_speed[0] = -relative_intersect * 5
             self.ball_speed[1] = -abs(self.ball_speed[1])  # Always bounce up
@@ -127,10 +134,10 @@ class ModelPlayer:
             self.game_over = True
 
         return self.game_over
-    
+
     def draw(self):
         screen.fill(BLACK)
-        
+
         # Draw game objects
         pygame.draw.rect(screen, WHITE, self.paddle)
         pygame.draw.ellipse(screen, WHITE, self.ball)
@@ -148,13 +155,15 @@ class ModelPlayer:
         if self.game_over:
             game_over_font = pygame.font.Font(None, 48)
             if self.bricks:  # Lost
-                text = game_over_font.render("Game Over! Press R to Restart", True, WHITE)
+                text = game_over_font.render(
+                    "Game Over! Press R to Restart", True, WHITE)
             else:  # Won
-                text = game_over_font.render("Victory! Press R to Restart", True, WHITE)
-            text_rect = text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
+                text = game_over_font.render(
+                    "Victory! Press R to Restart", True, WHITE)
+            text_rect = text.get_rect(
+                center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
             screen.blit(text, text_rect)
 
-    
 
 def main():
     try:
@@ -179,6 +188,7 @@ def main():
         raise e
     finally:
         pygame.quit()
+
 
 if __name__ == "__main__":
     main()

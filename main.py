@@ -147,12 +147,13 @@ def draw_score_and_timer(score, start_time):
 
 
 # =============================================================================== model
-    
+
 
 class BrickBreakerEnv(gym.Env):
     def __init__(self):
         super(BrickBreakerEnv, self).__init__()
-        self.observation_space = spaces.Box(low=0, high=1, shape=(7,), dtype=np.float32)   # State space dimensions
+        self.observation_space = spaces.Box(low=0, high=1, shape=(
+            7,), dtype=np.float32)   # State space dimensions
         self.action_space = spaces.Discrete(3)
         self.reset()
         self.bricks = create_bricks()
@@ -169,7 +170,8 @@ class BrickBreakerEnv(gym.Env):
 
     def reset(self):
         self.ball_x, self.ball_y = random.uniform(0.1, 0.9), 0.5
-        self.ball_dx, self.ball_dy = random.choice([-0.03, 0.03]), random.choice([-0.03, 0.03])
+        self.ball_dx, self.ball_dy = random.choice(
+            [-0.03, 0.03]), random.choice([-0.03, 0.03])
         self.paddle_x = 0.5
         self.score = 0
         self.time_elapsed = 0
@@ -194,26 +196,25 @@ class BrickBreakerEnv(gym.Env):
         self.ball_y += self.ball_dy
 
         # Check for brick collisions
-        for brick in self.bricks[:]:  # Use a copy of the list to avoid modification during iteration
+        # Use a copy of the list to avoid modification during iteration
+        for brick in self.bricks[:]:
             if (self.ball_x * SCREEN_WIDTH >= brick.left and
                 self.ball_x * SCREEN_WIDTH <= brick.right and
                 self.ball_y * SCREEN_HEIGHT >= brick.top and
-                self.ball_y * SCREEN_HEIGHT <= brick.bottom):
-                
-                self.bricks.remove(brick)  
-                self.ball_dy *= -1         
-                self.score += 10           
-                reward += 10               
-                break  
+                    self.ball_y * SCREEN_HEIGHT <= brick.bottom):
 
+                self.bricks.remove(brick)
+                self.ball_dy *= -1
+                self.score += 10
+                reward += 10
+                break
 
-                                                    #         <============================= Rewards
-        
+                #         <============================= Rewards
+
         # Game won
         if not self.bricks:  # All bricks broken
             done = True
             reward += 50  # Bonus reward for clearing all bricks
-
 
         # Ball-wall collision
         if self.ball_x <= 0 or self.ball_x >= 1:
@@ -224,34 +225,31 @@ class BrickBreakerEnv(gym.Env):
             reward = -20  # Strong penalty for losing
             done = True
 
-
-
         # Check for paddle collision
         if self.ball_y >= 0.95 and abs(self.paddle_x - self.ball_x) < 0.1:
             self.ball_dy *= -1
             reward += 30
 
-
-        # Close to ball 
+        # Close to ball
         if abs(self.paddle_x - self.ball_x) < 0.1:
             reward += 2  # Small reward for being near the ball
 
-
         # Predict trajectory
-        predicted_ball_x = self.ball_x + self.ball_dx * (1 - self.ball_y)  # Approximate where ball will land
+        predicted_ball_x = self.ball_x + self.ball_dx * \
+            (1 - self.ball_y)  # Approximate where ball will land
         if abs(self.paddle_x - predicted_ball_x) < 0.1:
-            reward += 5  # Reward for being aligned with the predicted trajectory  
+            reward += 5  # Reward for being aligned with the predicted trajectory
         if (action == 0 and self.paddle_x < predicted_ball_x) or (action == 1 and self.paddle_x > predicted_ball_x):
-            reward -= 1 # Penalize for moving away
-
+            reward -= 1  # Penalize for moving away
 
         # Update time and add small reward
         current_time = pygame.time.get_ticks()
-        self.time_elapsed = (current_time - self.start_time) / 1000  # Time in seconds
+        self.time_elapsed = (current_time - self.start_time) / \
+            1000  # Time in seconds
         reward += 0.1  # Reward for survival
 
         return (np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x, self.ball_start_x, self.ball_start_y]),
-        reward, done, {"score": self.score, "time": self.time_elapsed})
+                reward, done, {"score": self.score, "time": self.time_elapsed})
 
 
 # Main loop <=========================================
