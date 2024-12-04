@@ -5,12 +5,6 @@ import numpy as np
 import gym
 from gym import spaces
 
-# import tensorflow as tf
-
-# # Load the model
-# model = tf.keras.models.load_model('brick_breaker_model.h5')
-
-
 pygame.init()
 
 # Screen <=========================================
@@ -153,128 +147,111 @@ def draw_score_and_timer(score, start_time):
 
 
 # =============================================================================== model
+    
+
 class BrickBreakerEnv(gym.Env):
     def __init__(self):
         super(BrickBreakerEnv, self).__init__()
-        self.observation_space = spaces.Box(
-            low=0, high=1, shape=(6,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0, high=1, shape=(7,), dtype=np.float32)   # State space dimensions
         self.action_space = spaces.Discrete(3)
         self.reset()
+        self.bricks = create_bricks()
+
+    def create_bricks(self):
+        brick_list = []
+        for row in range(5):  # Adjust row/column as needed
+            for col in range(12):
+                x = col * (BRICK_WIDTH + BRICK_PADDING)
+                y = row * (BRICK_HEIGHT + BRICK_PADDING) + 40
+                brick = pygame.Rect(x, y, BRICK_WIDTH, BRICK_HEIGHT)
+                brick_list.append(brick)
+        return brick_list
 
     def reset(self):
-        self.ball_x, self.ball_y = 0.5, 0.5
-        self.ball_dx, self.ball_dy = 0.03, 0.03
+        self.ball_x, self.ball_y = random.uniform(0.1, 0.9), 0.5
+        self.ball_dx, self.ball_dy = random.choice([-0.03, 0.03]), random.choice([-0.03, 0.03])
         self.paddle_x = 0.5
         self.score = 0
         self.time_elapsed = 0
         self.start_time = pygame.time.get_ticks()
-
-        intercept_x = self.calculate_intercept()
-        return np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x, intercept_x])
-
-    def calculate_intercept(self):
-        # Calculate x-coordinate where the ball will hit the paddle's y-level
-        if self.ball_dy != 0:
-            steps_to_paddle = (0.95 - self.ball_y) / self.ball_dy
-            intercept_x = self.ball_x + self.ball_dx * steps_to_paddle
-            # Handle wrapping (ball crossing edges and bouncing)
-            while intercept_x < 0 or intercept_x > 1:
-                if intercept_x < 0:
-                    intercept_x = -intercept_x
-                elif intercept_x > 1:
-                    intercept_x = 2 - intercept_x
-            return intercept_x
-        return self.ball_x  # Default to ball's current x if no vertical movement
+        self.ball_start_x = self.ball_x  # Track starting position
+        self.ball_start_y = self.ball_y
+        self.bricks = self.create_bricks()
+        return np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x, self.ball_start_x, self.ball_start_y])
 
     def step(self, action):
-        previous_paddle_x = self.paddle_x
-        
+        reward = 0
+        done = False
+
         # Paddle movement logic
-        if action == 0:  # Left
+        if action == 0:
             self.paddle_x = max(0, self.paddle_x - 0.05)
-        elif action == 2:  # Right
+        elif action == 1:
             self.paddle_x = min(1, self.paddle_x + 0.05)
-        
+
         # Ball movement logic
         self.ball_x += self.ball_dx
         self.ball_y += self.ball_dy
-        
-        reward = 0
-        done = False
-        
-        # 1. Basic survival reward (small positive reward for staying alive)
-        reward += 0.1
-        
-        # 2. Positioning rewards
-        intercept_x = self.calculate_intercept()
-        distance_to_intercept = abs(self.paddle_x - intercept_x)
-        
-        # Exponential reward for good positioning (maximum +5 when perfectly aligned)
-        position_reward = 5 * np.exp(-10 * distance_to_intercept)
-        reward += position_reward
-        
-        # 3. Movement efficiency reward
-        movement_penalty = abs(self.paddle_x - previous_paddle_x) * 2
-        reward -= movement_penalty  # Penalize excessive movement
-        
-        # 4. Center court positioning when ball is far
-        if self.ball_y < 0.3:  # Ball is far from paddle
-            distance_to_center = abs(self.paddle_x - 0.5)
-            reward += 2 * (1 - distance_to_center)  # Reward being near center
-        
-        # 5. Brick breaking reward (assuming you add brick collision detection)
-        if self.check_brick_collision():  # You'll need to implement this
-            reward += 10
-        
-        # 6. Ball interception reward
-        if 0.9 <= self.ball_y <= 0.95 and distance_to_intercept < 0.1:
-            reward += 20  # Immediate reward for successful interception
-        
-        # 7. Game ending conditions
-        if self.ball_y >= 1:  # Ball lost
-            reward -= 30
-            done = True
-        
-        # 8. Victory reward
-        if len(self.bricks) == 0:  # All bricks broken
-            reward += 100
-            done = True
-        
-        # Update time
-        current_time = pygame.time.get_ticks()
-        self.time_elapsed = (current_time - self.start_time) / 1000
-        
-        # State for next iteration
-        next_state = np.array([
-            self.ball_x, 
-            self.ball_y, 
-            self.ball_dx, 
-            self.ball_dy, 
-            self.paddle_x, 
-            intercept_x
-        ])
-        
-        return next_state, reward, done, {
-            "score": self.score, 
-            "time": self.time_elapsed
-        }
 
-def check_brick_collision(self):
-    # Implement brick collision detection here
-    # Return True if ball hits a brick, False otherwise
-    ball_rect = pygame.Rect(
-        self.ball_x * SCREEN_WIDTH, 
-        self.ball_y * SCREEN_HEIGHT,
-        BALL_RADIUS * 2, 
-        BALL_RADIUS * 2
-    )
-    
-    for brick in self.bricks[:]:
-        if ball_rect.colliderect(brick):
-            self.bricks.remove(brick)
-            return True
-    return False
-# =============================================================================== model
+        # Check for brick collisions
+        for brick in self.bricks[:]:  # Use a copy of the list to avoid modification during iteration
+            if (self.ball_x * SCREEN_WIDTH >= brick.left and
+                self.ball_x * SCREEN_WIDTH <= brick.right and
+                self.ball_y * SCREEN_HEIGHT >= brick.top and
+                self.ball_y * SCREEN_HEIGHT <= brick.bottom):
+                
+                self.bricks.remove(brick)  
+                self.ball_dy *= -1         
+                self.score += 10           
+                reward += 10               
+                break  
+
+
+                                                    #         <============================= Rewards
+        
+        # Game won
+        if not self.bricks:  # All bricks broken
+            done = True
+            reward += 50  # Bonus reward for clearing all bricks
+
+
+        # Ball-wall collision
+        if self.ball_x <= 0 or self.ball_x >= 1:
+            self.ball_dx *= -1
+        if self.ball_y <= 0:
+            self.ball_dy *= -1
+        if self.ball_y >= 1:  # Ball lost
+            reward = -20  # Strong penalty for losing
+            done = True
+
+
+
+        # Check for paddle collision
+        if self.ball_y >= 0.95 and abs(self.paddle_x - self.ball_x) < 0.1:
+            self.ball_dy *= -1
+            reward += 30
+
+
+        # Close to ball 
+        if abs(self.paddle_x - self.ball_x) < 0.1:
+            reward += 2  # Small reward for being near the ball
+
+
+        # Predict trajectory
+        predicted_ball_x = self.ball_x + self.ball_dx * (1 - self.ball_y)  # Approximate where ball will land
+        if abs(self.paddle_x - predicted_ball_x) < 0.1:
+            reward += 5  # Reward for being aligned with the predicted trajectory  
+        if (action == 0 and self.paddle_x < predicted_ball_x) or (action == 1 and self.paddle_x > predicted_ball_x):
+            reward -= 1 # Penalize for moving away
+
+
+        # Update time and add small reward
+        current_time = pygame.time.get_ticks()
+        self.time_elapsed = (current_time - self.start_time) / 1000  # Time in seconds
+        reward += 0.1  # Reward for survival
+
+        return (np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x, self.ball_start_x, self.ball_start_y]),
+        reward, done, {"score": self.score, "time": self.time_elapsed})
 
 
 # Main loop <=========================================
