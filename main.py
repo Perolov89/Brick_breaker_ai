@@ -196,25 +196,21 @@ class BrickBreakerEnv(gym.Env):
         self.ball_y += self.ball_dy
 
         # Check for brick collisions
-        # Use a copy of the list to avoid modification during iteration
         for brick in self.bricks[:]:
             if (self.ball_x * SCREEN_WIDTH >= brick.left and
                 self.ball_x * SCREEN_WIDTH <= brick.right and
                 self.ball_y * SCREEN_HEIGHT >= brick.top and
                     self.ball_y * SCREEN_HEIGHT <= brick.bottom):
-
                 self.bricks.remove(brick)
                 self.ball_dy *= -1
                 self.score += 10
-                reward += 10
+                reward += 20  # Increased reward for breaking bricks
                 break
 
-                #         <============================= Rewards
-
         # Game won
-        if not self.bricks:  # All bricks broken
+        if not self.bricks:
             done = True
-            reward += 50  # Bonus reward for clearing all bricks
+            reward += 100  # Increased bonus for winning
 
         # Ball-wall collision
         if self.ball_x <= 0 or self.ball_x >= 1:
@@ -222,40 +218,49 @@ class BrickBreakerEnv(gym.Env):
         if self.ball_y <= 0:
             self.ball_dy *= -1
         if self.ball_y >= 1:  # Ball lost
-            reward = -20  # Strong penalty for losing
+            reward -= 50  # Increased penalty for losing
             done = True
 
-        # Check for paddle collision
-        if self.ball_y >= 0.95 and abs(self.paddle_x - self.ball_x) < 0.1:
-            self.ball_dy *= -1
-            reward += 30
+        # Paddle collision rewards
+        if self.ball_y >= 0.95:
+            if abs(self.paddle_x - self.ball_x) < 0.1:
+                reward += 40  # Increased reward for successful paddle hit
+                # Additional reward for centered hits
+                paddle_center = abs(self.paddle_x - self.ball_x) < 0.05
+                if paddle_center:
+                    reward += 10
+            else:
+                # Penalty increases as ball gets closer to bottom
+                reward -= 10 * (self.ball_y - 0.95) / 0.05
 
-        # Close to ball
-        if abs(self.paddle_x - self.ball_x) < 0.1:
-            reward += 2  # Small reward for being near the ball
+        # Positioning rewards
+        predicted_landing = self.ball_x + (self.ball_dx / self.ball_dy) * (1 - self.ball_y)
+        distance_to_prediction = abs(self.paddle_x - predicted_landing)
+        
+        # Reward for moving towards predicted landing position
+        if distance_to_prediction < 0.2:
+            reward += 5 * (0.2 - distance_to_prediction)  # More reward for better positioning
+        
+        # Penalty for moving away from the ball when it's falling
+        if self.ball_dy > 0:  # Ball is moving down
+            if (action == 0 and self.ball_x > self.paddle_x) or \
+               (action == 1 and self.ball_x < self.paddle_x):
+                reward -= 2
 
-        # Predict trajectory
-        predicted_ball_x = self.ball_x + self.ball_dx * \
-            (1 - self.ball_y)  # Approximate where ball will land
-        if abs(self.paddle_x - predicted_ball_x) < 0.1:
-            reward += 5  # Reward for being aligned with the predicted trajectory
-        if (action == 0 and self.paddle_x < predicted_ball_x) or (action == 1 and self.paddle_x > predicted_ball_x):
-            reward -= 1  # Penalize for moving away
+        # Small survival reward
+        reward += 0.1
 
-        # Update time and add small reward
-        current_time = pygame.time.get_ticks()
-        self.time_elapsed = (current_time - self.start_time) / \
-            1000  # Time in seconds
-        reward += 0.1  # Reward for survival
-
-        return (np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, self.paddle_x, self.ball_start_x, self.ball_start_y]),
+        return (np.array([self.ball_x, self.ball_y, self.ball_dx, self.ball_dy, 
+                         self.paddle_x, self.ball_start_x, self.ball_start_y]),
                 reward, done, {"score": self.score, "time": self.time_elapsed})
 
 
 # Main loop <=========================================
 
 def main():
-    state = STATE_PLAYING  # <============================= state
+    state = STATE_PLAYING
+    end_time = None  # Add this to track when game/round ends
+    RESTART_DELAY = 2000  # 2 seconds in milliseconds
 
     paddle = Paddle()
     ball = Ball()
@@ -265,18 +270,11 @@ def main():
 
     running = True
     while running:
+        current_time = pygame.time.get_ticks()
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.KEYDOWN:
-                # Restart game with Spacebar
-                if state != STATE_PLAYING and event.key == pygame.K_SPACE:  # <============= state
-                    state = STATE_PLAYING
-                    ball = Ball()
-                    paddle = Paddle()
-                    bricks = create_bricks()
-                    score = 0
-                    start_time = pygame.time.get_ticks()
 
         # Fill the screen with black
         screen.fill(BLACK)
@@ -291,9 +289,6 @@ def main():
             draw_bricks(bricks)
             paddle.draw()
             ball.draw()
-
-            # Draw the score and timer
-            draw_score_and_timer(score, start_time)
 
             # Paddle collision
             if ball.rect.colliderect(paddle.rect):
@@ -318,19 +313,34 @@ def main():
                     score += 10
                     break
 
-            # Check for game over condition    <============================= conclusion states
+            # Check for game over condition
             if ball.rect.top > SCREEN_HEIGHT:
                 state = STATE_GAME_OVER
-
+                end_time = current_time
+                
             # Check for victory condition
             if not bricks:
                 state = STATE_VICTORY
+                end_time = current_time
 
         elif state == STATE_GAME_OVER:
-            display_message("Game Over! Press Space to Restart")
+            display_message("Game Over!")
+            if current_time - end_time >= RESTART_DELAY:
+                state = STATE_PLAYING
+                ball = Ball()
+                paddle = Paddle()
+                bricks = create_bricks()
 
         elif state == STATE_VICTORY:
-            display_message("You Win! Press Space to Restart")
+            display_message("You Win!")
+            if current_time - end_time >= RESTART_DELAY:
+                state = STATE_PLAYING
+                ball = Ball()
+                paddle = Paddle()
+                bricks = create_bricks()
+
+        # Draw the score and timer
+        draw_score_and_timer(score, start_time)
 
         # Refresh the game window
         pygame.display.flip()

@@ -23,6 +23,8 @@ BLACK = (0, 0, 0)
 class ModelPlayer:
     def __init__(self):
         self.model = model
+        self.RESTART_DELAY = 2000  # 2 seconds in milliseconds
+        self.end_time = None
         self.reset_game()
 
     def reset_game(self):
@@ -36,6 +38,7 @@ class ModelPlayer:
         self.start_time = pygame.time.get_ticks()
         self.font = pygame.font.Font(None, 36)
         self.game_over = False
+        self.end_time = None
 
         self.ball_start_x = self.ball.centerx
         self.ball_start_y = self.ball.centery
@@ -78,8 +81,15 @@ class ModelPlayer:
         ], dtype=np.float32)
 
     def update(self):
+        current_time = pygame.time.get_ticks()
+        
+        # Check if it's time to restart after game over
         if self.game_over:
-            return True
+            if self.end_time is None:
+                self.end_time = current_time
+            elif current_time - self.end_time >= self.RESTART_DELAY:
+                self.reset_game()
+            return False
 
         # Get model prediction
         state = self.get_state()
@@ -94,11 +104,6 @@ class ModelPlayer:
         elif action == 2:  # Right
             self.paddle.x = min(
                 SCREEN_WIDTH - self.paddle.width, self.paddle.x + paddle_speed)
-
-        # Debug info                         <==================================== debug
-        print(f"State: {state}")
-        print(f"Q-values: {q_values}")
-        print(f"Chosen action: {action}")
 
         # Update ball position
         self.ball.x += self.ball_speed[0]
@@ -130,8 +135,10 @@ class ModelPlayer:
         # Check game over conditions
         if self.ball.bottom > SCREEN_HEIGHT:
             self.game_over = True
+            self.end_time = current_time
         elif not self.bricks:  # Victory condition
             self.game_over = True
+            self.end_time = current_time
 
         return self.game_over
 
@@ -155,11 +162,9 @@ class ModelPlayer:
         if self.game_over:
             game_over_font = pygame.font.Font(None, 48)
             if self.bricks:  # Lost
-                text = game_over_font.render(
-                    "Game Over! Press R to Restart", True, WHITE)
+                text = game_over_font.render("Game Over!", True, WHITE)
             else:  # Won
-                text = game_over_font.render(
-                    "Victory! Press R to Restart", True, WHITE)
+                text = game_over_font.render("Victory!", True, WHITE)
             text_rect = text.get_rect(
                 center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
             screen.blit(text, text_rect)
@@ -174,9 +179,6 @@ def main():
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_r and player.game_over:
-                        player.reset_game()
 
             player.update()
             player.draw()
